@@ -1,0 +1,61 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build for GitHub Pages
+        run: npm run build
+        env:
+          GITHUB_PAGES: "true"
+          GITHUB_PAGES_OWNER: invitespace
+          NEXT_PUBLIC_BASE_PATH: /rohit-preksha-wedding
+          NEXT_PUBLIC_SITE_URL: https://invitespace.github.io/rohit-preksha-wedding
+          NEXT_PUBLIC_FACEBOOK_APP_ID: ${{ secrets.FACEBOOK_APP_ID }}
+          NEXT_PUBLIC_ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
+          NEXT_PUBLIC_INVITE_SECRET: ${{ secrets.INVITE_SECRET }}
+
+      - name: Verify build output
+        run: |
+          test -f out/index.html
+          test -f out/og-whatsapp.jpg
+          file out/og-whatsapp.jpg | grep -q 'JPEG image data'
+          test "$(wc -c < out/og-whatsapp.jpg)" -lt 200000
+          test "$(grep -c 'property=\"og:image\"' out/index.html)" -eq 1
+          test -f out/images/couple-animated.png
+          test -f out/images/Generated_image.png
+          grep -q 'og:image' out/index.html
+          echo "Build OK — $(ls out/images | wc -l) images in out/images/"
+
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./out
+          publish_branch: gh-pages
+          force_orphan: true
+          commit_message: "Deploy wedding site"
